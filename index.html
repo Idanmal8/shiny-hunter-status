@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shiny Hunt Status</title>
+<style>
+:root { --bg:#f4f5f7; --card:#fff; --ink:#1d2330; --mute:#667085; --line:#d9dde5;
+        --ok:#1f8a4c; --warn:#b7791f; --bad:#d33a2c; --shiny:#c99a06; }
+@media (prefers-color-scheme: dark) { :root { --bg:#14161b; --card:#1d2027; --ink:#e7e9ee;
+        --mute:#98a1b3; --line:#2f3440; --ok:#4cc38a; --warn:#f0b44c; --bad:#ff6b5b; --shiny:#ffd84d; } }
+* { box-sizing:border-box } body { margin:0; background:var(--bg); color:var(--ink);
+  font:15px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif }
+main { max-width:900px; margin:0 auto; padding:16px; display:grid; gap:14px }
+h1 { font-size:20px; margin:0 } .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px }
+.top { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap }
+.pill { padding:4px 12px; border-radius:99px; font-weight:600; font-size:14px; color:#fff; background:var(--mute) }
+.running{background:var(--ok)} .paused{background:var(--warn)} .error,.offline{background:var(--bad)} .shiny{background:var(--shiny);color:#222}
+#banner { display:none; text-align:center; font-size:22px; font-weight:800; padding:18px; border-radius:12px; background:var(--shiny); color:#222 }
+.stats { display:flex; gap:22px; flex-wrap:wrap } .stat b { display:block; font-size:24px } .stat span { color:var(--mute); font-size:13px }
+#last b { font-size:20px; text-transform:capitalize } .is-shiny { color:var(--shiny); font-weight:700 } .is-normal { color:var(--mute) }
+.dex { display:grid; grid-template-columns:repeat(auto-fill, minmax(96px, 1fr)); gap:10px; margin-top:12px }
+.mon { border:1px solid var(--line); border-radius:10px; padding:6px; text-align:center; background:var(--bg) }
+.mon img { width:64px; height:64px; image-rendering:pixelated } .mon .n { font-size:13px; text-transform:capitalize }
+.mon .c { font-size:18px; font-weight:700 } .mon.has-shiny { border-color:var(--shiny) } .mon .s { font-size:12px; font-weight:700; color:var(--shiny) }
+.note { color:var(--mute); font-size:13px }
+</style></head><body><main>
+<div class="top"><h1>Shiny Hunt Status</h1><span id="pill" class="pill">loading</span></div>
+<div id="banner"></div>
+<div class="card"><div class="stats">
+  <div class="stat"><b id="total">-</b><span>encounters, all runs</span></div>
+  <div class="stat"><b id="since">-</b><span>since last shiny</span></div>
+  <div class="stat"><b id="run">-</b><span>this run</span></div>
+  <div class="stat" id="last"><b id="lastname">-</b><span id="lastkind">last encounter</span></div>
+</div></div>
+<div class="card"><div class="note">Encounters per Pokemon</div><div class="dex" id="dex"></div></div>
+<div class="note" id="updated"></div>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const labels = {running:"Hunting", paused:"Paused: waiting for tall grass", stopped:"Stopped",
+                error:"Stopped: needs attention", shiny:"SHINY FOUND", offline:"PC offline"};
+async function load() {
+  let s;
+  try {  // the API is not cached, so it is minutes fresher than the Pages copy
+    const r = await fetch("https://api.github.com/repos/Idanmal8/shiny-hunter-status/contents/status.json", {headers:{Accept:"application/vnd.github.raw+json"}, cache:"no-store"});
+    if (!r.ok) throw 0; s = await r.json();
+  } catch (e) { s = await (await fetch("status.json?t=" + Date.now(), {cache:"no-store"})).json(); }
+  const age = Math.round(Date.now()/1000 - s.updated);
+  const state = age > 600 ? "offline" : s.state;
+  $("pill").textContent = labels[state] || state; $("pill").className = "pill " + state;
+  $("banner").style.display = s.shiny ? "block" : "none";
+  $("banner").textContent = s.shiny ? "Shiny " + s.shiny.toUpperCase() + " found!" : "";
+  $("total").textContent = s.tally.total; $("since").textContent = s.tally.since_shiny; $("run").textContent = s.encounters;
+  if (s.last) { $("lastname").textContent = s.last.name; $("lastkind").textContent = s.last.shiny ? "SHINY" : "normal";
+                $("lastkind").className = s.last.shiny ? "is-shiny" : "is-normal"; }
+  $("dex").innerHTML = s.tally.grid.map(e => `<div class="mon${e.shiny ? " has-shiny" : ""}">
+    <img src="sprites/${e.dex}.png" alt=""><div class="n">${e.name}</div><div class="c">${e.count}</div>
+    ${e.shiny ? `<div class="s">${e.shiny} shiny</div>` : ""}</div>`).join("");
+  $("updated").textContent = "Updated " + (age < 90 ? "just now" : Math.round(age/60) + " min ago") +
+    ". The PC sends an update every 2 minutes. View only.";
+}
+load(); setInterval(load, 90000);
+</script></body></html>
